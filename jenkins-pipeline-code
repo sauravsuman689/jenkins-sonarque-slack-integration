@@ -1,0 +1,108 @@
+pipeline {
+    agent {
+      label 'slave'
+    }
+    environment {
+        SONARQUBE_URL = 'http://54.144.103.105:9000'  /* Adjust SonarQube server URL if needed */
+        SONARQUBE_PROJECT_KEY = 'sonarjenkinsproject'
+    }
+    stages {
+        stage('Checkout SCM') {
+            steps {
+                script {
+                    checkoutSCM()
+                }
+                slackNotification('Checkout SCM')
+            }
+        }
+
+        stage('Compiling and Running Test Cases') {
+            steps {
+                script {
+                    compileAndRunTests()
+                }
+                slackNotification('Compiling and Running Test Cases')
+            }
+        }
+
+        stage('Generating Cucumber Reports') {
+            steps {
+                script {
+                    generateCucumberReports()
+                }
+                slackNotification('Generating Cucumber Reports')
+            }
+        }
+
+        stage('Creating Package') {
+            steps {
+                script {
+                    createPackage()
+                }
+                slackNotification('Creating Package')
+            }
+        }
+
+        stage('Adding Generate Report') {
+            steps {
+                script {
+                    addGenerateReport()
+                }
+                slackNotification('Adding Generate Report')
+            }
+        }
+
+        stage('Analyzing Code Quality') {
+            steps {
+                script {
+                    analyzeCodeQuality()
+                }
+                slackNotification('Analyzing Code Quality')
+            }
+        }
+    }
+}
+
+def checkoutSCM() {
+    checkout scm: [
+        $class: 'GitSCM',
+        branches: [[name: '*/master']], 
+        userRemoteConfigs: [[url: 'https://github.com/sauravsuman689/java11-examples.git']]
+    ]
+}
+
+def compileAndRunTests() {
+    sh 'mvn clean'
+    sh 'mvn compile'
+    sh 'mvn test'
+}
+
+def generateCucumberReports() {
+    sh 'mvn verify'
+}
+
+def createPackage() {
+    sh 'mvn package'
+}
+
+def addGenerateReport() {
+    sh 'mvn verify'
+}
+
+def analyzeCodeQuality() {
+    withCredentials([string(credentialsId: 'b25934ce-2499-422b-8e5a-691726c789fa', variable: 'SONAR_TOKEN')]) {
+        sh '''
+           mvn sonar:sonar \
+           -Dsonar.projectKey="$SONARQUBE_PROJECT_KEY" \
+           -Dsonar.host.url="$SONARQUBE_URL" \
+           -Dsonar.login="$SONAR_TOKEN"
+        '''
+    }
+}
+
+def slackNotification(stageName) {
+    slackSend channel: 'jenkins', 
+              message: "Stage '${stageName}' completed", 
+              tokenCredentialId: 'ecdaa26b-d110-4cb2-a70e-2b33ed89d6a7',
+              username: 'bot'
+}
